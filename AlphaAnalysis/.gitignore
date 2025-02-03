@@ -1,0 +1,92 @@
+# folders
+.cache/
+.idea/
+preprocessing/
+__pycache__/
+__pypackages__/
+.ipynb_checkpoints
+*__pycache__*
+
+#data folders
+_backups/
+backups/
+_archive/
+archive/
+_data/
+data/
+_datasets/
+datasets/
+dataset/
+_dataset/
+_merge_data/
+merge_data/
+
+# others
+*.egg-info/
+
+# Compiled:
+*.com
+*.class
+*.py[cod]
+*.log
+*$py.class
+*.cache
+*.Rhistory
+
+# Data:
+*.core
+*.pkl
+*.pickle
+*.mat
+*.h5
+*.dat
+*.csv
+*.Rdata
+*.gz
+*.tar
+
+# Figures:
+*.mp4
+*.png
+*.jpg
+*.bmp
+*.ai
+*.gif
+*.pptx
+
+# Folders:
+*-logs
+
+# C++ Prerequisites:
+*.d
+
+# Compiled Object files:
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers:
+*.gch
+*.pch
+
+# Compiled Dynamic libraries:
+*.so
+*.dylib
+*.dll
+
+# Fortran module files:
+*.mod
+*.smod
+
+# Compiled Static libraries:
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables:
+*.exe
+*.out
+*.app
+

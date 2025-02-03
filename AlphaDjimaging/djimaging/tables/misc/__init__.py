@@ -1,0 +1,1 @@
+from .highresolution import HighResTemplate

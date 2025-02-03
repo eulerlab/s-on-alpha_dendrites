@@ -1,0 +1,19 @@
+stimulus:
+  pixel_size: 5
+  size_x: 1975
+  size_y: 1975
+  fps: 60
+
+source:
+  path: 'w_cricket'
+  path_wo_cricket: 'wo_cricket'
+  positions_in_pixel_space: True
+  pixel_size: 5
+  xc_um: 0
+  yc_um: 0
+
+files:
+  - 'f003_388219-390435-hr_left.npz'
+  - 'f002_97857-98042-hr_left.npz'
+  - 'f002_202578-203148-hr_left.npz'
+  - 'f003_401374-401889-hr_right.npz'

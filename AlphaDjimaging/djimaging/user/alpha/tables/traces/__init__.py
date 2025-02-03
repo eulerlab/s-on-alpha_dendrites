@@ -1,0 +1,3 @@
+from .events_per_second import EventsPerSecondTemplate
+from .resampled_averages import DownsampledAveragesTemplate
+from .wbg_spots import WbgSpotsTemplate

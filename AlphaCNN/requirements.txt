@@ -1,0 +1,18 @@
+numpy
+matplotlib
+scipy
+scikit-learn
+scikit-image
+joblib
+pandas
+tqdm
+h5py
+scikit-video
+# filterpy
+tensorflow
+keras
+shapely
+scikit-learn
+datajoint
+seaborn
+IPython

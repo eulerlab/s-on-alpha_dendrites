@@ -1,0 +1,13 @@
+kinds:
+  - baseline
+  - linear
+  - ridge
+  - small_mlp
+  - medium_mlp
+  - large_mlp
+
+split:
+  train: 0.8
+
+target:
+  delay_n_frames: 2
