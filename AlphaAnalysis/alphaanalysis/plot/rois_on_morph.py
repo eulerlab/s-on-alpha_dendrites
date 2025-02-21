@@ -8,28 +8,28 @@ from alphaanalysis.plot import plot_paths, plot_srf_outline
 
 def plot_rois_on_morph(
         ax, cell, highlight_list, fit_kind,
-        morph_tab, rf_tab, roi_pos_metrics_tab, roi_cal_stack_pos_tab,
-        line_stack_tab, field_stack_pos_tab, field_tab, experiment_tab,
+        morph_tab, rf_tab, roi_pos_tab, field_tab,
         restr=None, annotate=True, plot_srf_contours=False, plot_srf_offset=False, plot_rf_rois_only=False,
         path_kws=None, roi_kws=None, offset_kws=None, rf_contour_kws=None, cmap='plasma', add_colorbar=False,
         palettes=None, pixel_size_um=30, max_d_dist=None,
-        stim_offset_xy_um=(-15, -15), add_offset_rf_xy_um='auto'):
+        stim_offset_xy_um=(-15, -15), add_offset_rf_xy_um=None, flip_rf_y=False):
+
     date, exp_num = cell
-    key = dict(date=date, exp_num=exp_num)
+    cell_key = dict(date=date, exp_num=exp_num)
 
     if restr is None:
         restr = dict()
 
     # fetch
-    paths = pd.DataFrame((morph_tab & key).fetch1('df_paths')).path
-    soma_xyz = (morph_tab & key).fetch1('soma_xyz')
+    paths = pd.DataFrame((morph_tab & cell_key).fetch1('df_paths')).path
+    soma_xyz = (morph_tab & cell_key).fetch1('soma_xyz')
 
-    rois_tab = (roi_pos_metrics_tab & key & restr)
+    roi_pos_rest_tab = roi_pos_tab & cell_key & restr
     if plot_rf_rois_only:
-        rois_tab &= rf_tab
+        rf_keys = rf_tab.fetch('KEY')
+        roi_pos_rest_tab = roi_pos_rest_tab & rf_keys
 
-    field_ids, roi_ids, rois_pos_xyz = (roi_pos_metrics_tab & rois_tab.proj() & key & restr).fetch(
-        'field', 'roi_id', 'roi_pos_xyz')
+    field_ids, roi_ids, rois_pos_xyz = roi_pos_rest_tab.fetch('field', 'roi_id', 'roi_pos_xyz')
     rois_pos_xyz = np.stack(rois_pos_xyz.T)
 
     # plot
@@ -59,9 +59,9 @@ def plot_rois_on_morph(
                 **_roi_kws)
 
     for j, (field_id, roi_id) in enumerate(highlight_list):
-        key = [dict(date=date, exp_num=exp_num, roi_id=roi_id, field=field_id)
+        key_roi = [dict(date=date, exp_num=exp_num, roi_id=roi_id, field=field_id)
                for field_id in [f'd{field_id}', f'D{field_id}']]
-        x, y, z = (rois_tab & key).fetch1('roi_pos_xyz')
+        x, y, z = (roi_pos_tab & key_roi).fetch1('roi_pos_xyz')
 
         ax.plot(x, y, marker='o', ms=4, c=palettes[cell][j + 1], zorder=10000, mec='dimgray', alpha=0.9)
 
@@ -73,18 +73,19 @@ def plot_rois_on_morph(
 
     sm = None
 
-    stack_pixel_size_um = ((field_tab & "z_stack_flag=1") * line_stack_tab & (experiment_tab & key)).fetch1(
-        'pixel_size_um')
+    stack_pixel_size_um = ((field_tab & "z_stack_flag=1") & cell_key).fetch1('pixel_size_um')
 
-    restricted_rf_tab = rf_tab * field_stack_pos_tab * roi_cal_stack_pos_tab * roi_pos_metrics_tab & key & restr
-    srf_list, field_cpos_stack_xyz_list, roi_cpos_stack_xyz_list, d_dist_list = restricted_rf_tab.fetch(
-        'srf', 'rec_cpos_stack_xyz', 'roi_cal_pos_stack_xyz', 'd_dist_to_soma')
-    srf_outlines = fetch_srf_outlines(key, restricted_rf_tab, fit_kind=fit_kind)
+    restricted_rf_tab = rf_tab & cell_key & restr
+
+    srf_list, srf_keys = restricted_rf_tab.fetch('srf', 'KEY')
+    field_cpos_stack_xyz_list, roi_cpos_stack_xyz_list, d_dist_list = (roi_pos_tab & srf_keys).fetch(
+        'rec_cpos_stack_xyz', 'roi_cal_pos_stack_xyz', 'd_dist_to_soma')
+    srf_outlines = fetch_srf_outlines(restricted_rf_tab, fit_kind=fit_kind)
 
     if plot_srf_contours or plot_srf_offset:
         if isinstance(cmap, str):
             if max_d_dist is None:
-                max_d_dist = roi_pos_metrics_tab.fetch('d_dist_to_soma').max()
+                max_d_dist = roi_pos_rest_tab.fetch('d_dist_to_soma').max()
 
             cmapper = sns.color_palette(cmap, as_cmap=True)
             sm = plt.cm.ScalarMappable(cmap=cmapper, norm=plt.Normalize(vmin=0, vmax=max_d_dist))
@@ -115,7 +116,7 @@ def plot_rois_on_morph(
 
             srf_fit_center = plot_srf_outline(
                 ax, srf=srf, srf_outline=srf_outline,
-                pixel_size_um=pixel_size_um, center_offset_um=center_offset_um,
+                pixel_size_um=pixel_size_um, center_offset_um=center_offset_um, flip_y=flip_rf_y,
                 plot_outline=plot_srf_contours, plot_center=False, outline_kw=_rf_contour_kws)
 
             if plot_srf_offset:
@@ -128,13 +129,13 @@ def plot_rois_on_morph(
     return sm
 
 
-def fetch_srf_outlines(key, rf_tab, fit_kind):
+def fetch_srf_outlines(rf_tab, fit_kind):
     if 'dog' in fit_kind:
-        srf_outlines = (rf_tab & key).fetch('srf_eff_center_params')
+        srf_outlines = rf_tab.fetch('srf_eff_center_params')
     elif fit_kind == 'gauss':
-        srf_outlines = (rf_tab & key).fetch('srf_params')
+        srf_outlines = rf_tab.fetch('srf_params')
     elif fit_kind == 'contour':
-        srf_contours = (rf_tab & key).fetch('srf_contours')
+        srf_contours = rf_tab.fetch('srf_contours')
         srf_outlines = np.array([srf_contour[list(srf_contour.keys())[0]][0] for srf_contour in srf_contours],
                                 dtype=object)
     else:

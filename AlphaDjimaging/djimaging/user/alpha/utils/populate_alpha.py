@@ -188,23 +188,6 @@ __sta_params = dict(sta_params_id=1, filter_dur_s_past=1.2, filter_dur_s_future=
                     frac_train=1., frac_test=0., rf_method='sta', )
 
 
-def load_alpha_config(schema_name):
-    dj.config.load(CONFIG_FILE)
-    dj.config['schema_name'] = schema_name
-    dj.conn()
-
-    print("schema_name:", dj.config['schema_name'])
-    print("dataset:", get_dataset())
-
-
-def load_alpha_schema(create_schema=False, create_tables=False):
-    from djimaging.tables.location.location_from_table import prepare_dj_config_location_from_table
-    from djimaging.utils.dj_utils import activate_schema
-
-    prepare_dj_config_location_from_table(input_folder=os.path.split(__cell_position_table)[0])
-    activate_schema(schema=schema, create_schema=create_schema, create_tables=create_tables)
-
-
 def get_dataset():
     if 'soma' in dj.config['schema_name']:
         dataset = 'soma'

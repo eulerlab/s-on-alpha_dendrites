@@ -10,7 +10,7 @@ from djimaging.utils.math_utils import normalize
 
 def fetch_and_plot_srf_and_morph(
         key, roi_kind, fit_kind,
-        rf_tab, morph_tab, field_stack_pos_tab, linestack_tab, experiment_tab, field_tab, field_cal_stack_pos_tab,
+        rf_tab, morph_tab, roi_pos_tab, exp_tab, field_tab,
         pixel_size_um=30, srf=None, srf_outline=None,
         blur_std=1, blur_npix=2, upsample_srf_scale=5, srf_norm_kind='amp_one',
         ax=None, plot_im=True, plot_center=True, plot_outline=True, plot_morph=True, plot_roi=True,
@@ -38,11 +38,11 @@ def fetch_and_plot_srf_and_morph(
 
     # Compute offsets
     stack_pixel_size_um, stack_nx, stack_ny = (
-            (field_tab & "z_stack_flag=1") * linestack_tab & (experiment_tab & key)).fetch1(
-        'pixel_size_um', 'nxpix', 'nypix')
-    field_cpos_stack_xy = (field_stack_pos_tab & key).fetch1('rec_cpos_stack_xyz')[:2]
+            (field_tab & "z_stack_flag=1") & (exp_tab & key).proj()).fetch1('pixel_size_um', 'nxpix', 'nypix')
+    field_cpos_stack_xy = (roi_pos_tab & key).fetch1('rec_cpos_stack_xyz')[:2]
+
     if roi_kind == 'roi':
-        roi_cpos_stack_xy = (field_cal_stack_pos_tab.RoiCalibratedStackPos & key).fetch1('roi_cal_pos_stack_xyz')[:2]
+        roi_cpos_stack_xy = (roi_pos_tab & key).fetch1('roi_cal_pos_stack_xyz')[:2]
     else:
         roi_cpos_stack_xy = None
 
@@ -127,7 +127,8 @@ def plot_soma_srf_and_morph(
 def plot_srf(
         ax, srf=None, srf_outline=None, vabsmax=None, n_std=2,
         pixel_size_um=30, marker_kw=None, outline_kw=None, cmap='coolwarm',
-        upsample_srf_scale=0, blur_std=0, blur_npix=0, center_offset_um=(-15, -15),
+        upsample_srf_scale=0, blur_std=0, blur_npix=0,
+        center_offset_um=(-15, -15),
         norm_kind='none',
         plot_outline=False, plot_center=False, plot_im=True, fix_xlim=False):
     """Plot sRF and outline"""
@@ -144,36 +145,49 @@ def plot_srf(
         if srf is None:
             raise ValueError('srf must be provided to plot sRF image')
 
-        im = plot_srf_image(
+        plot_srf_image(
             ax, srf, center_offset_um=center_offset_um, pixel_size_um=pixel_size_um,
             cmap=cmap, vabsmax=vabsmax, fix_xlim=fix_xlim,
             upsample_srf_scale=upsample_srf_scale, blur_std=blur_std, blur_npix=blur_npix,
             norm_kind=norm_kind)
 
 
-def plot_srf_outline(ax, srf, pixel_size_um, srf_outline, center_offset_um, plot_outline=True, plot_center=False,
+def plot_srf_outline(ax, srf, pixel_size_um, srf_outline, center_offset_um,
+                     flip_y=False, plot_outline=True, plot_center=False,
                      n_std=2, outline_kw=None, marker_kw=None):
     from djimaging.user.alpha.tables.rf_contours.srf_contour_utils import compute_cntr_center
 
+    w_um = srf.shape[1] * pixel_size_um
+    h_um = srf.shape[0] * pixel_size_um
+
     if isinstance(srf_outline, dict):
-        w_um = srf.shape[1] * pixel_size_um
-        h_um = srf.shape[0] * pixel_size_um
+
+        dx = (srf_outline['x_mean'] + 0.5) * pixel_size_um
+        dy = (srf_outline['y_mean'] + 0.5) * pixel_size_um
+        theta = srf_outline['theta']
+
+        if flip_y:
+            theta = -theta
+            dy = -dy
 
         srf_fit_center = (
-            (srf_outline['x_mean'] + 0.5) * pixel_size_um - w_um / 2 + center_offset_um[0],
-            (srf_outline['y_mean'] + 0.5) * pixel_size_um - h_um / 2 + center_offset_um[1],
+            dx - w_um / 2 + center_offset_um[0],
+            dy - h_um / 2 + center_offset_um[1],
         )
 
         if plot_outline:
             plot_srf_ellipse(
                 ax, srf_fit_center, x_stddev=srf_outline['x_stddev'], y_stddev=srf_outline['y_stddev'], n_std=n_std,
-                theta=srf_outline['theta'], pixel_size_um=pixel_size_um, outline_kw=outline_kw)
+                theta=theta, pixel_size_um=pixel_size_um, outline_kw=outline_kw)
 
         if plot_center:
             plot_srf_center(ax, srf_fit_center, marker_kw=marker_kw)
     else:
+        assert srf_outline.shape[1] == 2
+        if flip_y:
+            srf_outline = srf_outline * np.array([+1, -1])
+
         srf_fit_center = compute_cntr_center(srf_outline)
-        srf_fit_center = (srf_fit_center[0] + center_offset_um[0], srf_fit_center[1] + center_offset_um[1])
 
         if plot_outline:
             plot_srf_contour(ax, srf_outline, center_offset_um, outline_kw=outline_kw)

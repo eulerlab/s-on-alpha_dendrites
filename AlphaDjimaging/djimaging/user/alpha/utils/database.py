@@ -1,13 +1,12 @@
 import os
-import sys
 
 import pandas as pd
 from djimaging.user.alpha.schemas.alpha_schema import *
-from djimaging.user.alpha.utils.populate_alpha import SCHEMA_PREFIX
-from djimaging.user.alpha.utils.populate_alpha import load_alpha_config, load_alpha_schema, get_dataset
+from djimaging.user.alpha.utils.populate_alpha import SCHEMA_PREFIX, CONFIG_FILE, get_dataset, __cell_position_table
 from djimaging.utils.dj_utils import get_secondary_keys
 
 __rf_kind = {'calcium': 'glm', 'glutamate': 'glm'}
+
 __rf_fit_kind = {'calcium': 'contour', 'glutamate': 'contour'}
 
 __quality_id = 1
@@ -20,8 +19,8 @@ __q_rf_fit_min = 0.35
 __glm_dnoise_params_id = 1
 __glm_params_id = {'calcium': 10, 'glutamate': 10}
 __q_rf_glm_min_cc = -2
-__q_rf_glm_split_min = 0.35  # 0.4
-__q_rf_glm_fit_min = 0.35  # 0.4
+__q_rf_glm_split_min = 0.35
+__q_rf_glm_fit_min = 0.35
 __lcontour_ratio_min = 0.8
 
 __soma_roi_max_dist = 50
@@ -34,10 +33,26 @@ __rf_max_lag = {'calcium': 0.3, 'glutamate': 0.2}  # Likely wrong sign for tRF w
 __features_id = {'calcium': 1, 'glutamate': 1}
 __clustering_id = {'calcium': 1, 'glutamate': 1}
 
-FlAGGED_NOISE_FILES = {
+FLAGGED_NOISE_FILES = {
     'calcium': [],
     'glutamate': [],
 }
+
+
+def load_alpha_config(schema_name):
+    dj.config.load(CONFIG_FILE)
+    dj.config['schema_name'] = schema_name
+    dj.conn()
+
+    print("schema_name:", dj.config['schema_name'])
+    print("dataset:", get_dataset())
+
+
+def load_alpha_schema(create_schema=False, create_tables=False):
+    from djimaging.utils.dj_utils import activate_schema
+    from djimaging.tables.location.location_from_table import prepare_dj_config_location_from_table
+    prepare_dj_config_location_from_table(input_folder=os.path.split(__cell_position_table)[0])
+    activate_schema(schema=schema, create_schema=create_schema, create_tables=create_tables)
 
 
 def connect_dj(indicator: str, create_tables=False, create_schema=False) -> None:
@@ -48,13 +63,9 @@ def connect_dj(indicator: str, create_tables=False, create_schema=False) -> None
     else:
         raise NotImplementedError(f"Unknown indicator: {indicator}")
 
-    with open(os.devnull, 'w') as fnull:
-        sys.stdout = fnull
-        sys.stderr = fnull
-        load_alpha_config(schema_name=schema_name)
-        load_alpha_schema(create_schema=create_schema, create_tables=create_tables)
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
+    load_alpha_config(schema_name=schema_name)
+    load_alpha_schema(create_schema=create_schema, create_tables=create_tables)
+
 
 def get_roi_kind_filter(roi_kind: str):
     if roi_kind == 'soma':
@@ -86,12 +97,22 @@ def get_roi_tab(quality_filter, roi_kind='roi') -> dj.Table:
     return Roi & q_filter & get_roi_kind_filter(roi_kind=roi_kind)
 
 
-def get_experiment_tab(quality_filter, roi_kind='roi') -> dj.Table:
-    return (Experiment * CellTags) & get_roi_tab(quality_filter=quality_filter, roi_kind=roi_kind)
+def get_experiment_tab(quality_filter=False, roi_kind='any') -> dj.Table:
+    if roi_kind == 'any':
+        if quality_filter:
+            raise ValueError("Quality filter not implemented for any ROI kind")
+        return Experiment() * CellTags()
+    else:
+        return (Experiment * CellTags) & get_roi_tab(quality_filter=quality_filter, roi_kind=roi_kind)
 
 
-def get_field_tab(quality_filter, roi_kind='roi') -> dj.Table:
-    return Field & get_roi_tab(quality_filter=quality_filter, roi_kind=roi_kind)
+def get_field_tab(quality_filter=False, roi_kind='any') -> dj.Table:
+    if roi_kind == 'any':
+        if quality_filter:
+            raise ValueError("Quality filter not implemented for any ROI kind")
+        return Field()
+    else:
+        return Field & get_roi_tab(quality_filter=quality_filter, roi_kind=roi_kind)
 
 
 def get_location_tab(quality_filter=True, roi_kind='roi') -> dj.Table:
@@ -105,8 +126,11 @@ def get_location_tab(quality_filter=True, roi_kind='roi') -> dj.Table:
     return location_tab & get_experiment_tab(quality_filter=quality_filter, roi_kind=roi_kind)
 
 
-def get_morph_tab(quality_filter=True, roi_kind='roi', rename=True) -> dj.Table:
+def get_morph_tab(quality_filter=True, roi_kind='roi', rename=True, include_linestack=False) -> dj.Table:
     morph_tab = MorphPaths * RetinalFieldLocationFromTable * SWC * ConvexHull * CellTags
+
+    if include_linestack:
+        morph_tab *= LineStack
 
     if get_dataset() == 'calcium':
         morph_tab *= RetinalFieldLocationWing().proj(group="wing_side")
@@ -164,18 +188,31 @@ def get_clustering_tab(quality_filter=True) -> dj.Table:
     return clust_tab & get_roi_tab(quality_filter=quality_filter, roi_kind='roi')
 
 
-def get_roi_pos_tab(stim_restriction=None, quality_filter=True, roi_kind='roi') -> dj.Table:
-    if stim_restriction is None:
-        stim_restriction = dict()
+def get_clustering_params_tab() -> dj.Table:
+    return (FeaturesParams().proj(
+        'ncomps', 'stim_names', 'norm_trace', feature_kind='kind', feature_params_dict='params_dict')
+            * ClusteringParameters) & f"clustering_id={__clustering_id[get_dataset()]}"
 
-    return ((FieldStackPos * FieldPosMetrics.RoiPosMetrics * (RelativeRoiPos & stim_restriction) * FieldPathPos) &
-            get_roi_tab(quality_filter=quality_filter, roi_kind=roi_kind))
+
+def get_clustering_features_tab() -> dj.Table:
+    return Features & f"features_id={__features_id[get_dataset()]}"
+
+
+def get_roi_pos_tab(quality_filter=True, roi_kind='roi') -> dj.Table:
+    return (
+            (FieldStackPos
+             * FieldPosMetrics.RoiPosMetrics
+             * (RelativeRoiPos & [dict(stim_name='noise_1500'), dict(stim_name='noise_2500')]).proj(
+                        'roi_dx_um', 'roi_dy_um', 'roi_d_um', pos_stim_name='stim_name')
+             * FieldPathPos
+             * FieldCalibratedStackPos.RoiCalibratedStackPos
+             ) & get_roi_tab(quality_filter=quality_filter, roi_kind=roi_kind))
 
 
 def get_rf_tab(
         roi_kind='roi', kind='glm', fit_kind=None,
         q_rf_split_min=None, q_rf_fit_min=None, rf_cdia_um_range=None,
-        quality_filter=True, inc_nl=False, rf_quality_filter=None, only_one_soma_rf=True,
+        quality_filter=True, rf_quality_filter=None, only_one_soma_rf=True,
         reject_tags=('none',)  # ROI is outside RF, this is not a good somatic RF proxy
 ) -> dj.Table:
     kind = kind if kind is not None else __rf_kind[get_dataset()]
@@ -193,8 +230,8 @@ def get_rf_tab(
     if roi_kind == 'soma' and only_one_soma_rf:
         rf_tab &= get_single_soma_rf_filter(tab=rf_tab, reject_tags=reject_tags)
 
-    if len(FlAGGED_NOISE_FILES[get_dataset()]) > 0:
-        rf_tab &= (Presentation & [f"h5_header!='{f}'" for f in FlAGGED_NOISE_FILES[get_dataset()]])
+    if len(FLAGGED_NOISE_FILES[get_dataset()]) > 0:
+        rf_tab &= (Presentation & [f"h5_header!='{f}'" for f in FLAGGED_NOISE_FILES[get_dataset()]])
 
     return rf_tab
 
@@ -249,7 +286,7 @@ def get_rf_glm_tab(
     elif fit_kind == 'dog':
         rf_tab = rf_tab * FitDoG2DRFGLM * GlmDogOffset
     elif fit_kind == 'gauss':
-        rf_tab = rf_tab * FitGauss2DRFGLM
+        rf_tab = rf_tab * FitGauss2DRFGLM * GlmGaussOffset
     elif fit_kind == 'contour':
         rf_tab = rf_tab * GLMContours * GLMContourMetrics * GLMContourOffset
     elif fit_kind == 'none':
@@ -307,7 +344,7 @@ def get_loc_df(rf_kind=None, rf_fit_kind=None, annotate_cells=None, roi_kind='ro
     df_cell_location = df_cell_location.droplevel((0, 3, 4)).drop_duplicates()
 
     if roi_kind == 'soma':
-        rf_tab = get_rf_tab(kind=rf_kind, fit_kind=rf_fit_kind, inc_nl=False, quality_filter=False, roi_kind=roi_kind)
+        rf_tab = get_rf_tab(kind=rf_kind, fit_kind=rf_fit_kind, quality_filter=False, roi_kind=roi_kind)
         df_soma_rf = (loc_tab * rf_tab).fetch(format='frame').droplevel((0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
         df_cell_location['pd-RF'] = False
         df_cell_location.loc[df_soma_rf.index, 'pd-RF'] = True
@@ -320,7 +357,7 @@ def get_loc_df(rf_kind=None, rf_fit_kind=None, annotate_cells=None, roi_kind='ro
 
 
 def get_rf_and_morph_tab(roi_kind, rf_kind=None, rf_fit_kind=None, quality_filter=True):
-    rf_tab = get_rf_tab(kind=rf_kind, fit_kind=rf_fit_kind, inc_nl=False, quality_filter=quality_filter,
+    rf_tab = get_rf_tab(kind=rf_kind, fit_kind=rf_fit_kind, quality_filter=quality_filter,
                         roi_kind=roi_kind)
     morph_tab = get_morph_tab(quality_filter=False, rename=True, roi_kind='roi')  # Always use roi here
     rf_morph_tab = rf_tab * morph_tab
@@ -340,7 +377,7 @@ def get_field_avg_offset(rf_kind=None, rf_fit_kind=None, rf_quality_filter=True)
     rf_fit_kind = rf_fit_kind if rf_fit_kind is not None else __rf_fit_kind[get_dataset()]
 
     field_rf_tab = get_rf_tab(
-        roi_kind='field', kind=rf_kind, fit_kind=rf_fit_kind, inc_nl=False, rf_quality_filter=rf_quality_filter)
+        roi_kind='field', kind=rf_kind, fit_kind=rf_fit_kind, rf_quality_filter=rf_quality_filter)
 
     df_field_rfs = (
         field_rf_tab.proj(field_rf_dx_um='rf_dx_um', field_rf_dy_um='rf_dy_um', field_rf_d_um='rf_d_um')
@@ -361,3 +398,13 @@ def get_default_rf_and_rf_fit_kind():
     rf_kind = __rf_kind[get_dataset()]
     rf_fit_kind = __rf_fit_kind[get_dataset()]
     return rf_kind, rf_fit_kind
+
+
+def get_pres_tab():
+    pres_tab = Presentation * Presentation.ScanInfo * Presentation.RoiMask * (
+            Presentation.StackAverages & dict(ch_name='wDataCh0'))
+    return pres_tab
+
+
+def get_paths_tab():
+    return FieldPathPos * MorphPaths().proj('soma_xyz', stack='field')
