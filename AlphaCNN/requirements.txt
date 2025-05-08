@@ -1,0 +1,17 @@
+tensorflow~=2.15.0
+keras~=2.15.0
+numpy
+matplotlib
+scipy
+scikit-learn
+scikit-image
+joblib
+pandas
+tqdm
+h5py
+scikit-video
+shapely
+scikit-learn
+datajoint
+seaborn
+IPython

@@ -1,0 +1,7 @@
+seed:
+  np: 8643
+  tf: 3215
+
+noise:
+  bc_scale: 0.2
+  n_samples: 20

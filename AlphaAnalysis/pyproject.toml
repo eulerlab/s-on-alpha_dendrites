@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["alphaanalysis"]
+
+[project]
+name = "alphaanalysis"
+version = "0.0.1"
+description = "Analysis of sOn alpha data"
+authors = [{ name = "Jonathan Oesterle", email = "jonathan.oesterle.work@gmail.com"}]
+dependencies = [
+    "numpy == 1.26.2",
+    "pandas == 2.2.1",
+    "scipy == 1.11.4",
+    "scikit-learn == 1.3.2",
+    "pingouin == 0.5.4",
+    "statsmodels == 0.14.1",
+    "matplotlib == 3.8.2",
+    "seaborn == 0.13.2",
+    "h5py == 3.10.0",
+    "morphopy == 0.7.2",
+    "openpyxl == 3.1.5",
+    "scikit_posthocs == 0.11.2",
+]
