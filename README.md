@@ -7,8 +7,7 @@ The paper, titled "Task-specific regional circuit adaptations in distinct mouse 
 The respective preprint, titled "Sustained ON alpha retinal ganglion cells in the temporal retina exhibit task-specific regional adaptions in dendritic signal integration", published in 2024, was uploaded to bioRxiv: https://doi.org/10.1101/2024.03.27.586958 
 
 Data and code can be found on G-Node:  
-https://gin.g-node.org/eulerlab/s-on-alpha-regional  
-https://doi.org/10.12751/g-node.7g8dd6
+https://gin.g-node.org/eulerlab/s-on-alpha-regional
 
 The code without the data can be found on GitHub:  
 https://github.com/eulerlab/s-on-alpha_dendrites
